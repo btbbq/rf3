@@ -1,320 +1,400 @@
-#الملف مدفوع بس حبيت انزلة مجانا
-import telebot
-from telebot import types
-from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup
-import smtplib
-from time import sleep
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 from email.mime.multipart import MIMEMultipart
+
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
-import os
 
-# ضع التوكن الخاص بك هنا
-Token = "6950692503:AAF8g7r3qphjImGErRdwHVk2-2IV_qyA6Bs"
-bot = telebot.TeleBot(Token, parse_mode="Markdown")
+import telebot, smtplib, json, os, time
 
-Owner = 103251268
-BayaTi = set()
 
-user_data = {}
-info_updated = {}  
 
-start_spam_button = types.InlineKeyboardButton(text="بدء الإرسال", callback_data="start_spam")
-view_accounts_button = types.InlineKeyboardButton(text="عرض حسابات", callback_data="view_accounts")
-set_email_button = types.InlineKeyboardButton(text="تعيين ايميل", callback_data="set_email")
-set_victim_email_button = types.InlineKeyboardButton(text="تعيين ايميلات", callback_data="set_victim_email")
-set_message_subject_button = types.InlineKeyboardButton(text="تعيين موضوع", callback_data="set_message_subject")
-set_message_button = types.InlineKeyboardButton(text="تعيين كليشة", callback_data="set_message")
-set_send_count_button = types.InlineKeyboardButton(text="تعيين عدد إرسال", callback_data="set_send_count")
-set_image_button = types.InlineKeyboardButton(text="تعيين صورة", callback_data="upload_image")
-set_interval_button = types.InlineKeyboardButton(text="تعيين سليب", callback_data="set_interval")
-clear_upload_image_button = types.InlineKeyboardButton(text="مسح صورة الرفع", callback_data="clear_upload_image")
-view_info_button = types.InlineKeyboardButton(text="عرض معلوماتك", callback_data="view_info")
-clear_info_button = types.InlineKeyboardButton(text="مسح معلوماتك", callback_data="clear_info")
+MAX_EMAILS = 8 #عدد الايميلات حط تحت 10
 
-@bot.message_handler(commands=["start"])
-def start(message):
-    user_id = message.from_user.id
-    if user_id in BayaTi:
-        if user_id not in user_data:
-            user_data[user_id] = {
-                "accounts": [],
-                "victim": [],
-                "subject": None,
-                "message_body": None,
-                "number": None,
-                "interval": 4,
-                "image_data": None,
-                "is_spamming": False,
-                "messages_sent_count": 0,
-                "messages_failed_count": 0,
-                "last_message_id": None,
-            }
-        if user_id not in info_updated:
-            info_updated[user_id] = False
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        markup.add(start_spam_button)
-        markup.add(view_accounts_button, set_email_button)
-        markup.add(set_victim_email_button, set_message_subject_button)
-        markup.add(set_message_button, set_send_count_button)
-        markup.add(set_image_button, set_interval_button)
-        markup.add(view_info_button, clear_upload_image_button)
-        markup.add(clear_info_button)
-        bot.reply_to(message, "اهلا بك في بوت رفع الـ خارجي ( بوت دارك)", reply_markup=markup)
-    else:
-        bot.reply_to(message, "*تم وصل طلبك ، اذا ما اشتركت كلمني , @J1JJL*")
-        request_approval(user_id, message.from_user.username)
+TOKEN = "6950692503:AAF8g7r3qphjImGErRdwHVk2-2IV_qyA6Bs"
 
-def request_approval(user_id, username):
-    key = InlineKeyboardMarkup(row_width=1)
-    approve_button = InlineKeyboardButton(text="• موافقه •", callback_data=f"Done_{user_id}")
-    reject_button = InlineKeyboardButton(text="• رفض الموافقة •", callback_data=f"Reject_{user_id}")
-    key.add(approve_button, reject_button)
-    bot.send_message(Owner, f'''*• لقد طلب أحدهم لاستخدام البوت 🤡 
-• تريد توافق عليه او لا ؟ 🤷🏽‍♂️ ..
-- @{username} | {user_id}*''', reply_markup=key)
+bot = telebot.TeleBot(TOKEN)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("Done_") or call.data.startswith("Reject_"))
-def handle_approval(call):
-    user_id = int(call.data.split('_')[1])
-    if call.data.startswith('Done_'):
-        BayaTi.add(user_id)
-        bot.send_message(user_id, "*تم وافقت عليه*")
-        bot.send_message(Owner, "*• وافقت عليه ياروع ...*")
-    elif call.data.startswith("Reject_"):
-        bot.send_message(user_id, "*• ما وافقت عليك ياروع هههههههه...*")
 
-@bot.callback_query_handler(func=lambda call: True)
-def handle_callback(call):
-    user_id = call.message.chat.id
-    if user_id not in BayaTi:
-        bot.send_message(user_id, "لم يتم الموافقة عليك بعد.")
+
+def load_users():
+
+    if os.path.exists('users2.json'):
+
+        with open('users2.json', 'r') as f:
+
+            return json.load(f)
+
+    return []
+
+
+
+def save_users(users):
+
+    with open('users2.json', 'w') as f:
+
+        json.dump(users, f, indent=4)
+
+
+
+def load_emails():
+
+    if os.path.exists('email.json'):
+
+        with open('email.json', 'r') as f:
+
+            data = json.load(f)
+
+            for user_id in data:
+
+                data[user_id]['email_count'] = len(data[user_id]['emails'])
+
+            return data
+
+    return {}
+
+
+
+def save_emails(data):
+
+    with open('email.json', 'w') as f:
+
+        json.dump(data, f, indent=4)
+
+
+
+@bot.message_handler(commands=['start'])
+
+def send_welcome(message):
+
+    users = load_users()
+
+    if str(message.from_user.id) in users or message.from_user.id == 103251268: #ايديك
+
+        markup = InlineKeyboardMarkup()
+
+        add_email_button = InlineKeyboardButton("اضف ايميل", callback_data="add_email")
+
+        send_email_button = InlineKeyboardButton("إرسال رسالة", callback_data="send_email")
+
+        view_emails_button = InlineKeyboardButton("ايميلاتي", callback_data="show_emails")
+
+        markup.add(add_email_button, send_email_button)
+
+        markup.add(view_emails_button)
+
+        bot.send_message(message.chat.id, "أهلاً بك في البوت!\n\nلاضافة ايميل اضغط اضف ايميل\nلإرسال رسالة اضغط ارسال رسالة", reply_markup=markup)
+
+    else:bot.send_message(message.chat.id, "تيم دارك")
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "add_email")
+
+def handle_add_email(call):
+
+    user_credentials = load_emails()
+
+    user_id = str(call.from_user.id)
+
+    if user_id not in user_credentials:
+
+        user_credentials[user_id] = {"emails": [], "email_count": 0}
+
+    if len(user_credentials[user_id]["emails"]) >= MAX_EMAILS:
+
+        bot.send_message(call.message.chat.id, "عذرًا، لقد وصلت الحد من الايميلات قُم بحذف واحداً على الاقل .")
+
         return
 
-    if call.data == "set_email":
-        bot.send_message(user_id, "أرسل الايميل:رمز تطبيقات")
-        bot.register_next_step_handler(call.message, set_email, user_id)
+    bot.send_message(call.message.chat.id, "يرجى إدخال عنوان البريد الإلكتروني الخاص بك:")
 
-    elif call.data == "set_victim_email":
-        bot.send_message(user_id, "أرسل إيميلات الضحايا مفصولة بفواصل")
-        bot.register_next_step_handler(call.message, set_victim_email, user_id)
+    bot.register_next_step_handler(call.message, get_email)
 
-    elif call.data == "set_message_subject":
-        bot.send_message(user_id, "أرسل موضوع الرسالة")
-        bot.register_next_step_handler(call.message, set_message_subject, user_id)
 
-    elif call.data == "set_message":
-        bot.send_message(user_id, "أرسل الكليشة ")
-        bot.register_next_step_handler(call.message, set_message, user_id)
 
-    elif call.data == "set_send_count":
-        bot.send_message(user_id, "أرسل عدد الرسائل ")
-        bot.register_next_step_handler(call.message, set_send_count, user_id)
+def get_email(message):
 
-    elif call.data == "set_interval":
-        bot.send_message(user_id, "ارسل الوقت بين رسالة ورسالة بثواني")
-        bot.register_next_step_handler(call.message, set_interval, user_id)
+    email = message.text
 
-    elif call.data == "start_spam":
-        user_data[user_id]['is_spamming'] = True
-        start_spam(user_id)
+    bot.send_message(message.chat.id, "يرجى إدخال كلمة المرور الخاصة ببريدك الإلكتروني:")
 
-    elif call.data == "view_info":
-        if info_updated.get(user_id, False):
-            bot.send_message(user_id, "تم تحديث المعلومات.")
-            info_updated[user_id] = False
-        info_text = f"البريد الإلكتروني: {', '.join([account['email'] for account in user_data[user_id]['accounts']])}\nرمز التطبيقات: {', '.join([account['password'] for account in user_data[user_id]['accounts']])}\nموضوع الرسالة: {user_data[user_id]['subject']}\nالرسالة: {user_data[user_id]['message_body']}\nسليب الرسائل: {user_data[user_id]['interval']} ثانية\nعدد الرسائل: {user_data[user_id]['number']}\nمسار الصورة: {'تم رفع الصورة' if user_data[user_id]['image_data'] else 'لم يتم تعيين صورة'}"
-        bot.send_message(user_id, info_text)
+    bot.register_next_step_handler(message, get_password, email)
 
-    elif call.data == "clear_info":
-        clear_info(user_id)
-        info_updated[user_id] = True
-        bot.send_message(user_id, "تم مسح جميع المعلومات.")
 
-    elif call.data == "clear_upload_image":
-        clear_uploaded_image(user_id)
-        info_updated[user_id] = True
-        bot.send_message(user_id, "تم مسح صورة الرفع.")
 
-    elif call.data == "upload_image":
-        bot.send_message(user_id, "ارسل الصورة")
-        bot.register_next_step_handler(call.message, upload_image, user_id)
+def get_password(message, email):
 
-    elif call.data == "view_accounts":
-        if user_data[user_id]['accounts']:
-            accounts_text = "\n".join([f"{account['email']} : {account['password']}" for account in user_data[user_id]['accounts']])
-            bot.send_message(user_id, f"الحسابات الموجودة:\n{accounts_text}")
-            bot.send_message(user_id, "لحذف حساب، أرسل /cler ايميل:باسورد")
+    password = message.text
+
+    user_credentials = load_emails()
+
+    user_id = str(message.from_user.id)
+
+    if user_id not in user_credentials:
+
+        user_credentials[user_id] = {"emails": [], "email_count": 0}
+
+    user_credentials[user_id]["emails"].append({"email": email, "password": password})
+
+    user_credentials[user_id]["email_count"] = len(user_credentials[user_id]["emails"])
+
+    save_emails(user_credentials)
+
+    bot.send_message(message.chat.id, "تم حفظ بريدك الإلكتروني وكلمة المرور بنجاح.")
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "send_email")
+
+def handle_send_email(call):
+
+    user_credentials = load_emails()
+
+    user_id = str(call.from_user.id)
+
+    if user_id not in user_credentials or not user_credentials[user_id]["emails"]:
+
+        bot.send_message(call.message.chat.id, "قم بتعيين ايميل اولاً .")
+
+        return
+
+    if user_credentials[user_id]['email_count'] >= MAX_EMAILS:
+
+        bot.send_message(call.message.chat.id, "عذرًا، لقد وصلت الحد من الايميلات قُم بحذف واحداً على الاقل .")
+
+        return
+
+    markup = InlineKeyboardMarkup()
+
+    for idx, email_entry in enumerate(user_credentials[user_id]["emails"]):
+
+        markup.add(InlineKeyboardButton(email_entry["email"], callback_data=f"use_email_{idx}"))
+
+    bot.send_message(call.message.chat.id, "اختر البريد الإلكتروني الذي تريد استخدامه لإرسال الرسالة:", reply_markup=markup)
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("use_email_"))
+
+def handle_use_email(call):
+
+    email_idx = int(call.data.split("_")[-1])
+
+    bot.send_message(call.message.chat.id, "الرجاء إدخال عنوان البريد الإلكتروني الذي ترغب في إرساله إليه:")
+
+    bot.register_next_step_handler(call.message, get_receiver_email, email_idx)
+
+
+
+def get_receiver_email(message, email_idx):
+
+    receiver_email = message.text
+
+    bot.send_message(message.chat.id, "الرجاء إدخال موضوع البريد الإلكتروني:")
+
+    bot.register_next_step_handler(message, get_email_subject, receiver_email, email_idx)
+
+
+
+def get_email_subject(message, receiver_email, email_idx):
+
+    subject = message.text
+
+    bot.send_message(message.chat.id, "الرجاء إدخال محتوى البريد الإلكتروني:")
+
+    bot.register_next_step_handler(message, get_email_content, receiver_email, subject, email_idx)
+
+
+
+def get_email_content(message, receiver_email, subject, email_idx):
+
+    content = message.text
+
+    bot.send_message(message.chat.id, "كم عدد الرسائل التي تريد إرسالها :")
+
+    bot.register_next_step_handler(message, get_email_count, receiver_email, subject, content, email_idx)
+
+
+
+def get_email_count(message, receiver_email, subject, content, email_idx):
+
+    try:
+
+        email_count = int(message.text)
+
+    except ValueError:
+
+        bot.send_message(message.chat.id, "يرجى إدخال رقم صحيح.")
+
+        return
+
+    bot.send_message(message.chat.id, "كم مدة الاستجابة مابين الرسائل (بالثواني) :")
+
+    bot.register_next_step_handler(message, get_email_interval, receiver_email, subject, content, email_count, email_idx)
+
+
+
+def get_email_interval(message, receiver_email, subject, content, email_count, email_idx):
+
+    try:
+
+        email_interval = int(message.text)
+
+    except ValueError:
+
+        bot.send_message(message.chat.id, "يرجى إدخال رقم صحيح.")
+
+        return
+
+    send_final_emails(message, receiver_email, subject, content, email_count, email_interval, email_idx)
+
+
+
+def send_final_emails(message, receiver_email, subject, content, email_count, email_interval, email_idx):
+
+    user_credentials = load_emails()
+
+    user_id = str(message.from_user.id)
+
+    if user_id not in user_credentials or email_idx >= len(user_credentials[user_id]["emails"]):
+
+        bot.send_message(message.chat.id, "حدث خطأ. يرجى المحاولة مرة أخرى.")
+
+        return
+
+    email_entry = user_credentials[user_id]["emails"][email_idx]
+
+    email = email_entry['email']
+
+    password = email_entry['password']
+
+    try:
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+
+        server.starttls()
+
+        server.login(email, password)
+
+        progress_message = bot.send_message(message.chat.id, f"جاري إرسال الرسائل ..\nالرسائل حالياً : 0")
+
+        for i in range(email_count):
+
+            msg = MIMEMultipart()
+
+            msg['From'] = email
+
+            msg['To'] = receiver_email
+
+            msg['Subject'] = subject
+
+            msg.attach(MIMEText(content, 'plain'))
+
+            server.send_message(msg)
+
+            if i < email_count - 1:
+
+                time.sleep(email_interval)
+
+                bot.edit_message_text(chat_id=message.chat.id, message_id=progress_message.message_id, text=f"جاري إرسال الرسائل ..\nالرسائل حالياً : {i + 1}")
+
+        server.quit()
+
+        bot.send_message(message.chat.id, "تم إرسال البريد الإلكتروني بنجاح!")
+
+    except Exception as e:
+
+        bot.send_message(message.chat.id, f"فشل إرسال البريد الإلكتروني. الخطأ: {e}")
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "show_emails")
+
+def handle_show_emails(call):
+
+    user_credentials = load_emails()
+
+    user_id = str(call.from_user.id)
+
+    if user_id in user_credentials and user_credentials[user_id]["emails"]:
+
+        markup = InlineKeyboardMarkup()
+
+        for idx, email_entry in enumerate(user_credentials[user_id]["emails"]):
+
+            markup.add(InlineKeyboardButton(f"{email_entry['email']} 🗑️", callback_data=f"delete_email_{idx}"))
+
+        bot.send_message(call.message.chat.id, "قائمة البريد الإلكتروني:", reply_markup=markup)
+
+    else:
+
+        bot.send_message(call.message.chat.id, "لم يتم العثور على عنوان بريد إلكتروني.")
+
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("delete_email_"))
+
+def handle_delete_email(call):
+
+    email_idx = int(call.data.split("_")[-1])
+
+    user_credentials = load_emails()
+
+    user_id = str(call.from_user.id)
+
+    if user_id in user_credentials and user_credentials[user_id]["emails"]:
+
+        if email_idx < len(user_credentials[user_id]["emails"]):
+
+            del user_credentials[user_id]["emails"][email_idx]
+
+            user_credentials[user_id]["email_count"] = len(user_credentials[user_id]["emails"])
+
+            save_emails(user_credentials)
+
+            bot.send_message(call.message.chat.id, "تم حذف البريد الإلكتروني بنجاح.")
+
         else:
-            bot.send_message(user_id, "لا توجد حسابات مضافة حتى الآن.")
 
-@bot.message_handler(commands=['cler'])
-def delete_account(message):
-    user_id = message.from_user.id
-    if message.text.startswith('/cler '):
-        try:
-            email_password = message.text.split('/cler ')[1].split(':')
-            if len(email_password) == 2:
-                email = email_password[0].strip()
-                password = email_password[1].strip()
-                user_data[user_id]['accounts'] = [acc for acc in user_data[user_id]['accounts'] if not (acc['email'] == email and acc['password'] == password)]
-                bot.reply_to(message, f"تم حذف الحساب بنجاح: {email}:{password}")
-            else:
-                bot.reply_to(message, "الرجاء إدخال الأمر بالصيغة الصحيحة: /cler ايميل:باسورد")
-        except IndexError:
-            bot.reply_to(message, "الرجاء إدخال الأمر بالصيغة الصحيحة: /cler ايميل:باسورد")
+            bot.send_message(call.message.chat.id, "حدث خطأ أثناء حذف البريد الإلكتروني.")
 
-def set_email(message, user_id):
-    email_password = message.text.split(":")
-    if len(email_password) != 2:
-        bot.send_message(user_id, "الرجاء إدخال البريد الإلكتروني وكلمة المرور للتطبيقات بالصيغة الصحيحة (البريد:كلمة المرور).")
-        return
-    email = email_password[0].strip()
-    password = email_password[1].strip()
-    user_data[user_id]['accounts'].append({'email': email, 'password': password})
-    info_updated[user_id] = True  # Mark info as updated
-    bot.send_message(user_id, f"تمت إضافة الحساب بنجاح: {email}:{password}")
-
-def set_victim_email(message, user_id):
-    victim_emails = message.text.split(',')
-    user_data[user_id]['victim'] = [email.strip() for email in victim_emails]
-    info_updated[user_id] = True  # Mark info as updated
-    bot.send_message(user_id, f"تم تعيين إيميلات الضحايا: {', '.join(user_data[user_id]['victim'])}")
-
-def set_message_subject(message, user_id):
-    user_data[user_id]['subject'] = message.text
-    info_updated[user_id] = True  # Mark info as updated
-    bot.send_message(user_id, f"تم تعيين موضوع الرسالة: {message.text}")
-
-def set_message(message, user_id):
-    user_data[user_id]['message_body'] = message.text
-    info_updated[user_id] = True  # Mark info as updated
-    bot.send_message(user_id, "تم تعيين نص الرسالة بنجاح.")
-
-def set_send_count(message, user_id):
-    try:
-        user_data[user_id]['number'] = int(message.text)
-        info_updated[user_id] = True  # Mark info as updated
-        bot.send_message(user_id, f"تم تعيين عدد الإرسال: {message.text}")
-    except ValueError:
-        bot.send_message(user_id, "يرجى إرسال رقم صحيح لعدد الإرسال.")
-
-def set_interval(message, user_id):
-    try:
-        user_data[user_id]['interval'] = int(message.text)
-        info_updated[user_id] = True  # Mark info as updated
-        bot.send_message(user_id, f"تم تعيين سليب الرسائل إلى {message.text} ثانية.")
-    except ValueError:
-        bot.send_message(user_id, "يرجى إرسال رقم صحيح للسليب.")
-
-def upload_image(message, user_id):
-    if message.content_type == 'photo':
-        file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        user_data[user_id]['image_data'] = downloaded_file
-        info_updated[user_id] = True  # Mark info as updated
-        bot.send_message(user_id, "تم رفع الصورة بنجاح.")
     else:
-        bot.send_message(user_id, "الرجاء إرسال صورة فقط.")
 
-def start_spam(user_id):
-    user_info = user_data[user_id]
-    if not user_info['accounts'] or not user_info['victim'] or not user_info['subject'] or not user_info['message_body'] or not user_info['number'] or not user_info['interval']:
-        bot.send_message(user_id, "الرجاء تعيين جميع المعلومات المطلوبة قبل البدء بالسبام.")
-        return
+        bot.send_message(call.message.chat.id, "لم يتم العثور على عنوان بريد إلكتروني.")
 
-    bot.send_message(user_id, "جارٍ بدء السبام...")
 
-    attempt = 0
-    max_attempts = 3
-    successful_attempts = 0
-    failed_attempts = 0
-    while attempt < max_attempts:
-        try:
-            for i in range(user_info['number']):
-                if not user_info['is_spamming']:
-                    break
 
-                for account in user_info['accounts']:
-                    msg = MIMEMultipart()
-                    msg['From'] = account['email']
-                    msg['To'] = ", ".join(user_info['victim'])
-                    msg['Subject'] = user_info['subject']
-                    body = user_info['message_body']
-                    msg.attach(MIMEText(body, 'plain'))
+@bot.message_handler(commands=['id'])
 
-                    if user_info['image_data']:
-                        part = MIMEBase('application', 'octet-stream')
-                        part.set_payload(user_info['image_data'])
-                        encoders.encode_base64(part)
-                        part.add_header('Content-Disposition', 'attachment; filename="image.jpg"')
-                        msg.attach(part)
+def handle_id(message):
 
-                    text = msg.as_string()
-                    server = smtplib.SMTP('smtp.gmail.com', 587)
-                    server.starttls()
-                    server.login(account['email'], account['password'])
-                    try:
-                        server.sendmail(account['email'], user_info['victim'], text)
-                        successful_attempts += 1
-                    except smtplib.SMTPRecipientsRefused:
-                        bot.send_message(user_id, f"تم حظر إيميل: {account['email']}.")
-                        failed_attempts += 1
-                        break
-                    finally:
-                        server.quit()
+    if message.from_user.id == 103251268: #ايديك
 
-                    user_info['messages_sent_count'] += 1
-                    if user_info['last_message_id']:
-                        bot.edit_message_text(chat_id=user_id, message_id=user_info['last_message_id'], text=f"جار إرسال الرسائل...\nالمحاولات الناجحة: {successful_attempts} ✅\nالمحاولات الفاشلة: {failed_attempts} ❎/nالايقاف عملية الارسال ارسل /stop")
-                    else:
-                        sent_msg = bot.send_message(user_id, f"جار إرسال الرسائل...\nالمحاولات الناجحة: {successful_attempts} ✅\nالمحاولات الفاشلة: {failed_attempts} ❎/nالايقاف عملية الارسال ارسل /stop")
-                        user_info['last_message_id'] = sent_msg.message_id
+        bot.send_message(message.chat.id, "حسناً الان ارسل الايدي لتفعيله")
 
-                    sleep(user_info['interval'])
+        bot.register_next_step_handler(message, get_user_id)
 
-            bot.send_message(user_id, "تم إرسال جميع الرسائل بنجاح.")
-            break
-        except Exception as e:
-            attempt += 1
-            if attempt < max_attempts:
-                bot.send_message(user_id, f"حدث خطأ أثناء الإرسال: {str(e)}. سيتم إعادة المحاولة ({attempt}/{max_attempts}).")
-                sleep(5)  # انتظر قليلاً قبل إعادة المحاولة
-            else:
-                bot.send_message(user_id, f"فشلت جميع محاولات الإرسال: {str(e)}")
-        finally:
-            user_info['is_spamming'] = False
-            user_info['image_data'] = None
-            user_info['last_message_id'] = None
 
-def clear_info(user_id):
-    user_data[user_id] = {
-        "accounts": [],
-        "victim": [],
-        "subject": None,
-        "message_body": None,
-        "number": None,
-        "interval": 4,
-        "image_data": None,
-        "is_spamming": False,
-        "messages_sent_count": 0,
-        "messages_failed_count": 0,
-        "last_message_id": None,
-    }
-    info_updated[user_id] = True  
 
-def clear_uploaded_image(user_id):
-    user_data[user_id]['image_data'] = None
-    info_updated[user_id] = True  
+def get_user_id(message):
 
-@bot.message_handler(commands=['stop'])
-def stop_spam(message):
-    user_id = message.from_user.id
-    if user_id in user_data and user_data[user_id]['is_spamming']:
-        user_data[user_id]['is_spamming'] = False
-        bot.reply_to(message, "تم إيقاف الإرسال.")
-    else:
-        bot.reply_to(message, "لا يوجد شيء لإيقافه.")
+    user_id = message.text
 
-bot.infinity_polling(none_stop=True)
+    user_ids = load_users()
+
+    if user_id not in user_ids:
+
+        user_ids.append(user_id)
+
+        save_users(user_ids)
+
+        bot.send_message(message.chat.id, "تم اضافة الايدي بنجاح")
+
+    else:bot.send_message(message.chat.id, "الايدي مضاف من قبل")
+
+
+
+bot.polling()
+
+
+
