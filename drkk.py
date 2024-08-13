@@ -11,7 +11,7 @@ from email import encoders
 import os
 
 # ضع التوكن الخاص بك هنا
-Token = "6950692503:AAE4BPAdDeCON0befEmpW5Vi7QFAUx4rWTs"
+Token = "6950692503:AAF8g7r3qphjImGErRdwHVk2-2IV_qyA6Bs"
 bot = telebot.TeleBot(Token, parse_mode="Markdown")
 
 Owner = 103251268
